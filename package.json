@@ -1,0 +1,25 @@
+{
+  "name": "gst-ewb-recon",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-period reconciliation of GSTR-1 (B2B/EXP/CDNR/SEZ) against E-Way Bill data, with timing-difference, tax-type and threshold-aware logic and an actionable report.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0"
+  }
+}
