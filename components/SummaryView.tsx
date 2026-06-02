@@ -57,6 +57,21 @@ export function SummaryView({ summary, report, onDownloadExcel, onDownloadHtml }
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+          <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">GSTR-1 JSON coverage</div>
+          <div className="text-sm text-gray-800">Return period: <span className="font-semibold">{summary.gstrFps.map(periodLabel).join(', ') || '—'}</span></div>
+          <div className="text-sm text-gray-600">Invoice dates: {summary.gstrDateRange || '—'}</div>
+          <div className="text-xs text-gray-500 mt-1">{summary.gstrFiles} file(s) · {num(summary.uniqueGstrDocs)} docs</div>
+        </div>
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
+          <div className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">E-Way Bill Excel coverage</div>
+          <div className="text-sm text-gray-800">Period(s): <span className="font-semibold">{summary.ewbPeriods.map(periodLabel).join(', ') || '—'}</span></div>
+          <div className="text-sm text-gray-600">Doc dates: {summary.ewbDateRange || '—'}</div>
+          <div className="text-xs text-gray-500 mt-1">{summary.ewbFiles} file(s) · {num(summary.validEwbRows)} valid rows</div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-3 mb-6">
         <Card label="Tax at risk (variances)" value={inr(summary.totalTaxAtRisk)} tone="risk" />
         <Card label="EWB-only tax exposure" value={inr(summary.ewbOnlyTaxExposure)} tone="risk" />

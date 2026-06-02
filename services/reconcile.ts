@@ -7,7 +7,7 @@ import { DEFAULT_CONFIG } from '../types';
 import { parseGstrFiles } from './parseGstr';
 import { parseEwbFiles } from './parseEwb';
 import {
-  normalizeDocNo, digitsOnly, round2, uniq, periodLabel,
+  normalizeDocNo, digitsOnly, round2, uniq, periodLabel, periodFromFp,
 } from './utils';
 
 const isNoteCat = (c: string) => c === 'CDNR_C' || c === 'CDNR_D';
@@ -294,10 +294,27 @@ export const reconcile = (
   });
 
   // ----- Summary -----
-  const periods = uniq([
-    ...gstrDocs.map((d) => d.period),
-    ...validEwb.map((d) => d.period),
-  ]).sort();
+  const gstrPeriods = uniq(gstrDocs.map((d) => d.period)).sort();
+  const ewbPeriods = uniq(ewbDocsAll.map((d) => d.period)).sort();
+  const periods = uniq([...gstrPeriods, ...ewbPeriods]).sort();
+  const gstrFps = uniq(gstrJsons.map((f) => periodFromFp(f?.fp))).sort();
+
+  // Min–max doc-date range per source ("dd/mm/yyyy – dd/mm/yyyy").
+  const dateRange = (dates: string[]): string => {
+    const sortable = dates
+      .filter(Boolean)
+      .map((d) => {
+        const m = d.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        return m ? { key: `${m[3]}${m[2]}${m[1]}`, label: d } : null;
+      })
+      .filter((x): x is { key: string; label: string } => !!x)
+      .sort((a, b) => a.key.localeCompare(b.key));
+    if (!sortable.length) return '';
+    const lo = sortable[0].label, hi = sortable[sortable.length - 1].label;
+    return lo === hi ? lo : `${lo} – ${hi}`;
+  };
+  const gstrDateRange = dateRange(gstrDocs.map((d) => d.doc_date));
+  const ewbDateRange = dateRange(ewbDocsAll.map((d) => d.doc_date));
 
   const totalTaxAtRisk = round2(variances.reduce(
     (s, r) => s + Math.abs(r.cgst_var) + Math.abs(r.sgst_var) + Math.abs(r.igst_var), 0));
@@ -335,6 +352,11 @@ export const reconcile = (
 
   const summary: SummaryData = {
     periods,
+    gstrPeriods,
+    ewbPeriods,
+    gstrFps,
+    gstrDateRange,
+    ewbDateRange,
     gstrFiles: gstrJsons.length,
     ewbFiles: ewbBuffers.length,
     validEwbRows: validEwb.length,

@@ -230,6 +230,12 @@ export interface PeriodSummary {
 
 export interface SummaryData {
   periods: string[];
+  // Per-source coverage (what each uploaded file actually spans).
+  gstrPeriods: string[];     // tax periods seen in the GSTR-1 JSON(s)
+  ewbPeriods: string[];      // doc-date periods seen in the E-Way Bill file(s)
+  gstrFps: string[];         // GSTR-1 filing periods (fp) as YYYY-MM
+  gstrDateRange: string;     // "10/04/2026 – 28/04/2026" or ''
+  ewbDateRange: string;
   gstrFiles: number;
   ewbFiles: number;
   validEwbRows: number;
