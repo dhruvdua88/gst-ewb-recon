@@ -23,18 +23,82 @@ const FIELD_SYNONYMS: Record<string, string[]> = {
   supplyType: ['supply type', 'supplytype'],
 };
 
+// Strip everything except a-z0-9 so "Doc.No", "Doc No" and "DOCNO" all collapse
+// to "docno". GST portal headers use dots (Doc.No / Doc.Date / Doc.Type) which
+// the old space-based synonyms missed.
+const squash = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
 const buildColMap = (headers: string[]): ColMap => {
-  const lower = headers.map((h) => String(h || '').toLowerCase().trim());
+  const squashed = headers.map(squash);
   const map: ColMap = {};
   for (const [field, syns] of Object.entries(FIELD_SYNONYMS)) {
     let idx = -1;
     for (const syn of syns) {
-      idx = lower.findIndex((h) => h.includes(syn));
+      const s = squash(syn);
+      idx = squashed.findIndex((h) => h.includes(s));
       if (idx !== -1) break;
     }
     map[field] = idx;
   }
   return map;
+};
+
+/** Decode an ArrayBuffer to text (UTF-8). */
+const bufToText = (buf: ArrayBuffer): string => {
+  try {
+    return new TextDecoder('utf-8').decode(new Uint8Array(buf));
+  } catch {
+    // Fallback for environments without TextDecoder.
+    let s = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return s;
+  }
+};
+
+const decodeEntities = (s: string): string =>
+  s
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n));
+
+/**
+ * The GST portal exports the E-Way Bill report as an HTML <table> saved with a
+ * .xls extension — it is NOT a real Excel binary. SheetJS does not parse it
+ * (every line lands in a single cell), so we extract the table ourselves.
+ * Uses DOMParser in the browser; falls back to a regex scan elsewhere.
+ */
+const htmlToGrid = (text: string): any[][] | null => {
+  if (!/<\s*tr[\s>]/i.test(text) && !/<\s*table[\s>]/i.test(text)) return null;
+
+  // Browser path: DOMParser handles malformed markup robustly.
+  if (typeof DOMParser !== 'undefined') {
+    try {
+      const doc = new DOMParser().parseFromString(text, 'text/html');
+      const table = doc.querySelector('table');
+      const trs = Array.from((table || doc).querySelectorAll('tr'));
+      const grid = trs.map((tr) =>
+        Array.from(tr.querySelectorAll('td,th')).map((c) =>
+          (c.textContent || '').replace(/\s+/g, ' ').trim()
+        )
+      );
+      if (grid.length) return grid;
+    } catch {
+      /* fall through to regex */
+    }
+  }
+
+  // Regex fallback (non-DOM environments).
+  const grid = [...text.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((m) =>
+    [...m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
+      decodeEntities(c[1].replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()
+    )
+  );
+  return grid.length ? grid : null;
 };
 
 /** Some EWB exports carry a banner row before the real header. Find the header row. */
@@ -55,16 +119,28 @@ export const parseEwbFiles = (
   const warnings: string[] = [];
 
   buffers.forEach((buf, fileIdx) => {
-    let workbook: any;
-    try {
-      workbook = XLSX.read(buf, { type: 'array', cellDates: true });
-    } catch {
-      warnings.push(`E-Way Bill file #${fileIdx + 1} could not be read as Excel — skipped.`);
-      return;
+    let grid: any[][] | null = null;
+
+    // GST portal "xls" files are really HTML tables — try that first.
+    const text = bufToText(buf);
+    if (/^\s*</.test(text) || /<\s*table[\s>]/i.test(text)) {
+      grid = htmlToGrid(text);
     }
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const grid: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-    if (grid.length < 2) {
+
+    // Real .xlsx / .xls (binary) — let SheetJS handle it.
+    if (!grid) {
+      let workbook: any;
+      try {
+        workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+      } catch {
+        warnings.push(`E-Way Bill file #${fileIdx + 1} could not be read as Excel or HTML — skipped.`);
+        return;
+      }
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      grid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    }
+
+    if (!grid || grid.length < 2) {
       warnings.push(`E-Way Bill file #${fileIdx + 1} appears empty — skipped.`);
       return;
     }
@@ -91,7 +167,11 @@ export const parseEwbFiles = (
         raw[h || `col${i}`] = v instanceof Date ? formatDate(v) : v;
       });
 
-      const docNo = String(at(row, 'docNo') ?? '').trim();
+      // GST HTML exports wrap some fields in single quotes ('172418734122') and
+      // use a leading Excel text-marker ('90000356) — strip both ends.
+      const stripQuote = (v: any) => String(v ?? '').trim().replace(/^'+|'+$/g, '');
+
+      const docNo = stripQuote(at(row, 'docNo'));
       if (!docNo) continue; // skip total/footer rows with no doc no
 
       const docDate = formatDate(at(row, 'docDate'));
@@ -108,7 +188,7 @@ export const parseEwbFiles = (
         sgst: parseNumber(at(row, 'sgst')),
         igst: parseNumber(at(row, 'igst')),
         cess: parseNumber(at(row, 'cess')),
-        ewb_no: String(at(row, 'ewbNo') ?? '').trim(),
+        ewb_no: stripQuote(at(row, 'ewbNo')),
         ewb_date: formatDate(at(row, 'ewbDate')),
         raw,
       };
