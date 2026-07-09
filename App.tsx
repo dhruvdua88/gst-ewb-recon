@@ -10,16 +10,31 @@ import { DEFAULT_CONFIG } from './types';
 import { LogoIcon, DocumentIcon } from './components/Icons';
 import { guessPeriodFromName } from './services/utils';
 
-const FileHints = ({ files }: { files: File[] }) => {
+const FileHints = ({ files, onClear }: { files: File[]; onClear: () => void }) => {
   if (files.length === 0) return null;
   return (
-    <ul className="mt-1 text-xs text-gray-500 space-y-0.5">
-      {files.map((f, i) => {
-        const p = guessPeriodFromName(f.name);
-        return <li key={i} className="truncate">• {f.name}{p && <span className="ml-1 text-indigo-600 font-medium">→ {p}</span>}</li>;
-      })}
-    </ul>
+    <div className="mt-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="font-medium text-gray-600">{files.length} file(s) loaded — periods:</span>
+        <button type="button" onClick={onClear} className="text-red-600 hover:underline">Clear</button>
+      </div>
+      <ul className="mt-0.5 text-xs text-gray-500 space-y-0.5">
+        {files.map((f, i) => {
+          const p = guessPeriodFromName(f.name);
+          return <li key={i} className="truncate">• {f.name}{p && <span className="ml-1 text-indigo-600 font-medium">→ {p}</span>}</li>;
+        })}
+      </ul>
+    </div>
   );
+};
+
+// Merge newly-picked files into the existing list (dedupe by name+size) so periods
+// can be added across several clicks / folders instead of each pick replacing the last.
+const mergeFiles = (existing: File[], picked: FileList | null): File[] => {
+  if (!picked) return existing;
+  const byKey = new Map(existing.map((x) => [`${x.name}:${x.size}`, x]));
+  Array.from(picked).forEach((f) => byKey.set(`${f.name}:${f.size}`, f));
+  return [...byKey.values()];
 };
 
 interface ResultState {
@@ -97,15 +112,15 @@ export default function App(): React.ReactNode {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
               <div>
                 <FileUploader title="GSTR-1 Offline JSON(s)" acceptedTypes=".json"
-                  onFileSelect={(f) => { setGstrFiles(f ? Array.from(f) : []); reset(); }}
+                  onFileSelect={(f) => { setGstrFiles((prev) => mergeFiles(prev, f)); reset(); }}
                   icon={<DocumentIcon className="h-10 w-10 text-blue-500" />} />
-                <FileHints files={gstrFiles} />
+                <FileHints files={gstrFiles} onClear={() => { setGstrFiles([]); reset(); }} />
               </div>
               <div>
                 <FileUploader title="E-Way Bill Excel Report(s)" acceptedTypes=".xlsx, .xls"
-                  onFileSelect={(f) => { setEwbFiles(f ? Array.from(f) : []); reset(); }}
+                  onFileSelect={(f) => { setEwbFiles((prev) => mergeFiles(prev, f)); reset(); }}
                   icon={<DocumentIcon className="h-10 w-10 text-green-500" />} />
-                <FileHints files={ewbFiles} />
+                <FileHints files={ewbFiles} onClear={() => { setEwbFiles([]); reset(); }} />
               </div>
             </div>
 

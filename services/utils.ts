@@ -92,6 +92,19 @@ export const normalizeDocNo = (raw: any): string => {
   return s || 'BLANK';
 };
 
+/**
+ * Aggregation key for a document number — uppercased and whitespace-collapsed but
+ * WITHOUT stripping separators. This keeps genuinely distinct documents apart
+ * (e.g. "90003639" vs "90003639-", which the EWB portal emits as two different
+ * consignments) so their values are never summed into one bucket. Fuzzy matching
+ * across format differences is still handled separately by normalizeDocNo().
+ */
+export const rawDocKey = (raw: any): string => {
+  if (raw === null || raw === undefined) return 'BLANK';
+  const s = String(raw).toUpperCase().replace(/\s+/g, ' ').trim();
+  return s || 'BLANK';
+};
+
 /** Digits-only fallback token (last-resort match). */
 export const digitsOnly = (raw: any): string => {
   const d = String(raw ?? '').replace(/\D/g, '').replace(/^0+/, '');

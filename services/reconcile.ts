@@ -7,7 +7,7 @@ import { DEFAULT_CONFIG } from '../types';
 import { parseGstrFiles } from './parseGstr';
 import { parseEwbFiles } from './parseEwb';
 import {
-  normalizeDocNo, digitsOnly, round2, uniq, periodLabel, periodFromFp,
+  normalizeDocNo, digitsOnly, round2, uniq, periodLabel, periodFromFp, rawDocKey,
 } from './utils';
 
 const isNoteCat = (c: string) => c === 'CDNR_C' || c === 'CDNR_D';
@@ -25,7 +25,9 @@ const aggregateGstr = (docs: ParsedGstrDoc[], cfg: ReconConfig): Map<string, Agg
     const norm = normalizeDocNo(d.doc_no);
     const cls = classOf(d.category);
     const gUsable = cfg.useGstinInKey && usableGstin(d.buyer_gstin);
-    let key = `${gUsable ? d.buyer_gstin : 'NOG'}#${norm}~${cls}`;
+    // Aggregate on the RAW doc number so distinct documents that merely normalise
+    // alike (e.g. "90003639" vs "90003639-") are never summed together.
+    let key = `${gUsable ? d.buyer_gstin : 'NOG'}#${rawDocKey(d.doc_no)}~${cls}`;
     if (!cfg.matchAcrossPeriods) key += `@${d.period}`;
 
     const ex = map.get(key);
@@ -53,10 +55,10 @@ const aggregateGstr = (docs: ParsedGstrDoc[], cfg: ReconConfig): Map<string, Agg
 const aggregateEwb = (docs: ParsedEwbDoc[], cfg: ReconConfig): Map<string, AggEwb> => {
   const map = new Map<string, AggEwb>();
   for (const d of docs) {
-    const norm = normalizeDocNo(d.doc_no);
     const cls = d.doc_type.toLowerCase().includes('credit') || d.doc_type.toLowerCase().includes('debit') ? 'NOTE' : 'INV';
     const gUsable = cfg.useGstinInKey && usableGstin(d.other_party_gstin);
-    let key = `${gUsable ? d.other_party_gstin : 'NOG'}#${norm}~${cls}`;
+    // Raw-doc-no key (see aggregateGstr) — distinct docs must not merge/sum.
+    let key = `${gUsable ? d.other_party_gstin : 'NOG'}#${rawDocKey(d.doc_no)}~${cls}`;
     if (!cfg.matchAcrossPeriods) key += `@${d.period}`;
 
     const ex = map.get(key);
@@ -258,16 +260,30 @@ export const reconcile = (
     let matched: AggEwb | undefined;
     let confidence: MatchConfidence = 'Number Only';
 
-    // 1. direct key (gstin#norm~cls [@period])
-    const direct = idx.byKey.get(g.key);
-    if (direct && !consumed.has(direct.key)) {
-      matched = direct;
-      confidence = direct.doc_no === g.doc_no ? 'Exact' : 'GSTIN+Number';
-    }
-    // 2. norm + class fallback
-    if (!matched) {
-      matched = tryFallback(idx.byNorm.get(`${norm}~${cls}`), g.buyer_gstin);
-      if (matched) confidence = usableGstin(g.buyer_gstin) && matched.other_party_gstin === g.buyer_gstin ? 'GSTIN+Number' : 'Number Only';
+    // 1+2. Match on normalised doc-no, but when several EWB documents share that
+    //      normalised number for the same GSTIN (e.g. "90003639" and "90003639-",
+    //      two distinct consignments), pick the one whose assessable value ties to
+    //      this invoice — not just whichever raw string happens to sort first. This
+    //      is what stops the wrong EWB being matched (and its value mis-reported).
+    const gAss = Math.abs(g.assessable);
+    const normCands = (idx.byNorm.get(`${norm}~${cls}`) || []).filter((c) => !consumed.has(c.key));
+    if (normCands.length) {
+      const sameG = usableGstin(g.buyer_gstin)
+        ? normCands.filter((c) => c.other_party_gstin === g.buyer_gstin)
+        : [];
+      const pool = sameG.length ? sameG : normCands;
+      pool.sort((a, b) => {
+        const da = Math.abs(Math.abs(a.assessable) - gAss);
+        const db = Math.abs(Math.abs(b.assessable) - gAss);
+        if (da !== db) return da - db;                     // closest value first
+        const ax = a.doc_no === g.doc_no ? 0 : 1;          // then exact raw doc-no
+        const bx = b.doc_no === g.doc_no ? 0 : 1;
+        return ax - bx;
+      });
+      matched = pool[0];
+      confidence = matched.doc_no === g.doc_no
+        ? 'Exact'
+        : (sameG.length ? 'GSTIN+Number' : 'Number Only');
     }
     // 3. digits-only fallback
     if (!matched && digitsOnly(g.doc_no)) {
