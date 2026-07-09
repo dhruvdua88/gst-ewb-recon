@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { FileUploader } from './components/FileUploader';
 import { ResultsDisplay } from './components/ResultsDisplay';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -8,32 +8,17 @@ import { generateHtmlReport } from './services/reportService';
 import type { SummaryData, ReconciliationResult, ReconConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { LogoIcon, DocumentIcon } from './components/Icons';
-import { guessPeriodFromName } from './services/utils';
-
-const FileHints = ({ files, onClear }: { files: File[]; onClear: () => void }) => {
-  if (files.length === 0) return null;
-  return (
-    <div className="mt-1">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-medium text-gray-600">{files.length} file(s) loaded — periods:</span>
-        <button type="button" onClick={onClear} className="text-red-600 hover:underline">Clear</button>
-      </div>
-      <ul className="mt-0.5 text-xs text-gray-500 space-y-0.5">
-        {files.map((f, i) => {
-          const p = guessPeriodFromName(f.name);
-          return <li key={i} className="truncate">• {f.name}{p && <span className="ml-1 text-indigo-600 font-medium">→ {p}</span>}</li>;
-        })}
-      </ul>
-    </div>
-  );
-};
+import { periodFromFp, periodLabel } from './services/utils';
 
 // Merge newly-picked files into the existing list (dedupe by name+size) so periods
 // can be added across several clicks / folders instead of each pick replacing the last.
+const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
 const mergeFiles = (existing: File[], picked: FileList | null): File[] => {
   if (!picked) return existing;
-  const byKey = new Map(existing.map((x) => [`${x.name}:${x.size}`, x]));
-  Array.from(picked).forEach((f) => byKey.set(`${f.name}:${f.size}`, f));
+  // Dedupe on name+size+lastModified — GST-portal exports for different months often
+  // share the SAME filename (e.g. returns_..._0.json), so name alone would drop one.
+  const byKey = new Map(existing.map((x) => [fileKey(x), x]));
+  Array.from(picked).forEach((f) => byKey.set(fileKey(f), f));
   return [...byKey.values()];
 };
 
@@ -49,8 +34,20 @@ export default function App(): React.ReactNode {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ResultState | null>(null);
+  // Detected return period per GSTR file (read from the JSON `fp`) — the portal names
+  // every month's export identically, so the filename can't tell them apart.
+  const [gstrPeriods, setGstrPeriods] = useState<string[]>([]);
 
   const reset = () => { setResult(null); setError(null); };
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(gstrFiles.map(async (f) => {
+      try { const fp = JSON.parse(await f.text())?.fp; const p = periodFromFp(fp); return p ? periodLabel(p) : ''; }
+      catch { return ''; }
+    })).then((labels) => { if (!cancelled) setGstrPeriods(labels); });
+    return () => { cancelled = true; };
+  }, [gstrFiles]);
 
   const handleReconcile = useCallback(async () => {
     if (gstrFiles.length === 0 || ewbFiles.length === 0) {
@@ -110,18 +107,18 @@ export default function App(): React.ReactNode {
         <main>
           <div className="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
-              <div>
-                <FileUploader title="GSTR-1 Offline JSON(s)" acceptedTypes=".json"
-                  onFileSelect={(f) => { setGstrFiles((prev) => mergeFiles(prev, f)); reset(); }}
-                  icon={<DocumentIcon className="h-10 w-10 text-blue-500" />} />
-                <FileHints files={gstrFiles} onClear={() => { setGstrFiles([]); reset(); }} />
-              </div>
-              <div>
-                <FileUploader title="E-Way Bill Excel Report(s)" acceptedTypes=".xlsx, .xls"
-                  onFileSelect={(f) => { setEwbFiles((prev) => mergeFiles(prev, f)); reset(); }}
-                  icon={<DocumentIcon className="h-10 w-10 text-green-500" />} />
-                <FileHints files={ewbFiles} onClear={() => { setEwbFiles([]); reset(); }} />
-              </div>
+              <FileUploader title="GSTR-1 Offline JSON(s)" acceptedTypes=".json"
+                icon={<DocumentIcon className="h-10 w-10 text-blue-500" />}
+                files={gstrFiles} periodLabels={gstrPeriods}
+                onAdd={(f) => { setGstrFiles((prev) => mergeFiles(prev, f)); reset(); }}
+                onRemove={(i) => { setGstrFiles((prev) => prev.filter((_, x) => x !== i)); reset(); }}
+                onClear={() => { setGstrFiles([]); reset(); }} />
+              <FileUploader title="E-Way Bill Excel Report(s)" acceptedTypes=".xlsx, .xls"
+                icon={<DocumentIcon className="h-10 w-10 text-green-500" />}
+                files={ewbFiles}
+                onAdd={(f) => { setEwbFiles((prev) => mergeFiles(prev, f)); reset(); }}
+                onRemove={(i) => { setEwbFiles((prev) => prev.filter((_, x) => x !== i)); reset(); }}
+                onClear={() => { setEwbFiles([]); reset(); }} />
             </div>
 
             <p className="text-xs text-gray-400 text-center mb-2">

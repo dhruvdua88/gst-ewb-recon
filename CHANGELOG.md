@@ -2,6 +2,17 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.4.1] — 2026-07-09
+
+### Changed
+- **Multi-file upload UX overhaul.** The uploader is now fully controlled by the merged
+  list, so it shows **every** file loaded (previously only the last pick was visible),
+  each with its detected return period, an individual remove (✕) and a Clear-all. The
+  drop zone stays active after the first drop ("Add more files"), so months can be
+  dragged in one at a time. GSTR-1 periods are read from each JSON's `fp` (the portal
+  names every month's export identically, so filenames can't distinguish them), and
+  dedupe now keys on name+size+lastModified so no same-named file is silently dropped.
+
 ## [1.4.0] — 2026-07-09
 
 ### Fixed
