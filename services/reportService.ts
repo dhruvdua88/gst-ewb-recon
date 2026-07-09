@@ -141,10 +141,27 @@ export const generateHtmlReport = (summary: SummaryData, report: ReconciliationR
             '#15803d', '#f0fdf4'),
         ])}
 
+        ${summary.ewbFileLikelyIncomplete ? `
+        <div style="margin:14px 0;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">
+          <div style="font-weight:700;color:#991b1b;font-size:13px;">⚠️ E-Way Bill file looks incomplete — read before acting</div>
+          <div style="font-size:12px;color:#b91c1c;line-height:1.5;margin-top:4px;">
+            ${num(summary.gstrMissingEwbCount)} taxable goods invoices (${inr(summary.gstrOnlyMissingEwbValue)} assessable)
+            have no matching e-way bill — only ${Math.round(summary.ewbCoverageRatio * 100)}% of EWB-requiring invoices matched.
+            This usually means the EWB export did not cover the full period. Re-export the complete e-way bill list
+            (all sub-users) for the exact return period and re-run before treating the figure below as a compliance gap.
+          </div>
+        </div>` : ''}
+        ${summary.ewbOnlyTimingCount ? `
+        <div style="margin:14px 0;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;color:#1e40af;line-height:1.5;">
+          <strong>${num(summary.ewbOnlyTimingCount)}</strong> EWB-only document(s) worth
+          <strong>${inr(summary.ewbOnlyTimingValue)}</strong> are timing items (invoice dated in a month whose GSTR-1
+          was not uploaded) and are excluded from the “EWB-only tax exposure” below — they are reported in that month’s own GSTR-1.
+        </div>` : ''}
+
         ${h2('💰 Money at a Glance')}
         ${cardGrid([
           card(inr(summary.totalTaxAtRisk), 'Tax at risk (matched variances)', '#b91c1c'),
-          card(inr(summary.ewbOnlyTaxExposure), 'EWB-only tax exposure (under-reporting)', '#b91c1c'),
+          card(inr(summary.ewbOnlyTaxExposure), 'EWB-only tax exposure (genuine, ex-timing)', '#b91c1c'),
           card(inr(summary.gstrOnlyMissingEwbValue), 'GSTR value likely needing an EWB', '#4338ca'),
           card(num(summary.completelyMatched), 'Documents matched clean', '#15803d'),
         ])}

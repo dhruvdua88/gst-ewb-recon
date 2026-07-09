@@ -72,9 +72,30 @@ export function SummaryView({ summary, report, onDownloadExcel, onDownloadHtml }
         </div>
       </div>
 
+      {summary.ewbFileLikelyIncomplete && (
+        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="font-semibold text-red-800">⚠️ E-Way Bill file looks incomplete — read before acting</p>
+          <p className="text-sm text-red-700 mt-1">
+            {num(summary.gstrMissingEwbCount)} taxable goods invoices ({inr(summary.gstrOnlyMissingEwbValue)} assessable)
+            have no matching e-way bill, and only {Math.round(summary.ewbCoverageRatio * 100)}% of EWB-requiring invoices
+            matched. This almost always means the EWB export did not cover the full period — <b>re-export the complete
+            e-way bill list (all sub-users) for the exact return period and re-run</b> before treating the
+            “GSTR value likely needing EWB” figure as a compliance gap.
+          </p>
+        </div>
+      )}
+
+      {summary.ewbOnlyTimingCount > 0 && (
+        <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+          <b>{num(summary.ewbOnlyTimingCount)}</b> EWB-only document(s) worth <b>{inr(summary.ewbOnlyTimingValue)}</b> were
+          re-classified as <b>timing</b> (invoice dated in a month whose GSTR-1 was not uploaded), so they are excluded
+          from the “EWB-only tax exposure” below. They are almost certainly reported in that month’s own GSTR-1.
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-3 mb-6">
         <Card label="Tax at risk (variances)" value={inr(summary.totalTaxAtRisk)} tone="risk" />
-        <Card label="EWB-only tax exposure" value={inr(summary.ewbOnlyTaxExposure)} tone="risk" />
+        <Card label="EWB-only tax exposure (genuine)" value={inr(summary.ewbOnlyTaxExposure)} tone="risk" />
         <Card label="GSTR value likely needing EWB" value={inr(summary.gstrOnlyMissingEwbValue)} />
         <Card label="Matched clean" value={num(summary.completelyMatched)} tone="ok" />
       </div>

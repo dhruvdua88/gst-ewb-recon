@@ -132,7 +132,7 @@ export interface AggEwb {
   rows: ParsedEwbDoc[];
 }
 
-export type MatchConfidence = 'Exact' | 'GSTIN+Number' | 'Number Only';
+export type MatchConfidence = 'Exact' | 'GSTIN+Number' | 'Number Only' | 'GSTIN+Value+Date';
 
 export interface MatchedRow {
   key: string;
@@ -185,6 +185,8 @@ export interface GstrOnlyRow extends AggGstr {
 export type EwbOnlyReason =
   | 'Not reported in GSTR-1 (possible omission — review)'
   | 'Reported in GSTR-1 of a different period (timing)'
+  | 'Invoice date in a period with no GSTR-1 uploaded (likely timing — upload that month’s GSTR-1)'
+  | 'Zero-tax / free-of-cost movement (verify — not tax under-reporting)'
   | 'Invoice cancelled in GSTR-1? (verify)'
   | 'Delivery challan / non-invoice movement';
 
@@ -250,11 +252,19 @@ export interface SummaryData {
   deliveryChallanRows: number;
   // actionable money figures
   totalTaxAtRisk: number;           // sum of abs tax variance on matched-with-variance
-  ewbOnlyTaxExposure: number;       // tax on EWBs not in GSTR (possible under-reporting)
+  ewbOnlyTaxExposure: number;       // tax on EWBs genuinely not in GSTR (possible under-reporting)
   gstrOnlyMissingEwbValue: number;  // assessable of GSTR docs that likely needed an EWB
   timingDifferenceCount: number;
   taxTypeMismatchCount: number;
   gstinMismatchCount: number;
+  // EWB-only rows re-classified out of "under-reporting" (timing / cross-period / zero-tax)
+  ewbOnlyTimingCount: number;       // count of EWB-only rows whose period has no GSTR-1 uploaded
+  ewbOnlyTimingValue: number;       // assessable of those rows (headline that is NOT real omission)
+  ewbOnlyZeroTaxCount: number;      // count of zero-tax / FOC EWB-only rows
+  // Incomplete-EWB-upload detector
+  ewbFileLikelyIncomplete: boolean; // true when many taxable goods invoices have no EWB
+  ewbCoverageRatio: number;         // matched / (matched + GSTR "EWB likely required") , 0..1
+  gstrMissingEwbCount: number;      // count of GSTR docs flagged "EWB likely required — not found"
   perPeriod: PeriodSummary[];
 }
 

@@ -94,19 +94,31 @@ interface EwbIndexes {
   byKey: Map<string, AggEwb>;
   byNorm: Map<string, AggEwb[]>;   // norm~cls -> entries
   byDigits: Map<string, AggEwb[]>; // digits~cls -> entries
+  byValGstin: Map<string, AggEwb[]>; // gstin|roundedAssessable~cls -> entries (doc-no-agnostic)
 }
+
+// Doc-number-agnostic key: buyer GSTIN + assessable value (rounded to the rupee) + class.
+// Used only as a last resort to catch invoices whose EWB uses a different number series
+// (e.g. SGFOC / SG-WR vs the 9000xxxx series) but the same party and value.
+const valGstinKey = (gstin: string, assessable: number, cls: string): string =>
+  `${gstin}|${Math.round(Math.abs(assessable))}~${cls}`;
 
 const buildEwbIndexes = (ewbMap: Map<string, AggEwb>): EwbIndexes => {
   const byNorm = new Map<string, AggEwb[]>();
   const byDigits = new Map<string, AggEwb[]>();
+  const byValGstin = new Map<string, AggEwb[]>();
   ewbMap.forEach((e) => {
     const cls = e.doc_type.toLowerCase().includes('credit') || e.doc_type.toLowerCase().includes('debit') ? 'NOTE' : 'INV';
     const norm = `${normalizeDocNo(e.doc_no)}~${cls}`;
     const dig = `${digitsOnly(e.doc_no)}~${cls}`;
     (byNorm.get(norm) || byNorm.set(norm, []).get(norm)!).push(e);
     if (digitsOnly(e.doc_no)) (byDigits.get(dig) || byDigits.set(dig, []).get(dig)!).push(e);
+    if (usableGstin(e.other_party_gstin) && Math.abs(e.assessable) > 1) {
+      const vk = valGstinKey(e.other_party_gstin, e.assessable, cls);
+      (byValGstin.get(vk) || byValGstin.set(vk, []).get(vk)!).push(e);
+    }
   });
-  return { byKey: ewbMap, byNorm, byDigits };
+  return { byKey: ewbMap, byNorm, byDigits, byValGstin };
 };
 
 const buildMatchedRow = (
@@ -257,6 +269,17 @@ export const reconcile = (
       matched = tryFallback(idx.byDigits.get(`${digitsOnly(g.doc_no)}~${cls}`), g.buyer_gstin);
       if (matched) confidence = 'Number Only';
     }
+    // 4. GSTIN + assessable-value fallback (doc-no differs in format). Only fire when the
+    //    buyer GSTIN is usable, the value is material, and there is exactly ONE free EWB
+    //    candidate with that party+value — to avoid stitching unrelated documents together.
+    if (!matched && usableGstin(g.buyer_gstin) && Math.abs(g.assessable) > 1) {
+      const vk = valGstinKey(g.buyer_gstin, g.assessable, cls);
+      const cands = (idx.byValGstin.get(vk) || []).filter((c) => !consumed.has(c.key));
+      if (cands.length === 1) {
+        matched = cands[0];
+        confidence = 'GSTIN+Value+Date';
+      }
+    }
 
     if (matched) {
       consumed.add(matched.key);
@@ -281,16 +304,34 @@ export const reconcile = (
     gstr_only.push({ ...g, reason, total_tax: round2(g.cgst + g.sgst + g.igst) });
   });
 
+  // Periods for which a GSTR-1 was actually uploaded (filing periods + invoice-date periods
+  // seen in the JSON). An EWB whose document date falls OUTSIDE this set cannot possibly
+  // match — its return simply was not provided — so it must NOT be flagged as an omission.
+  const gstrCoveredPeriods = new Set<string>();
+  gstrJsons.forEach((f) => { const p = periodFromFp(f?.fp); if (p) gstrCoveredPeriods.add(p); });
+  gstrDocs.forEach((d) => { if (d.period) gstrCoveredPeriods.add(d.period); });
+
   // EWB-only (unconsumed EWB aggs)
   const ewb_only: EwbOnlyRow[] = [];
   ewbMap.forEach((e) => {
     if (consumed.has(e.key)) return;
     const cls = e.doc_type.toLowerCase().includes('credit') || e.doc_type.toLowerCase().includes('debit') ? 'NOTE' : 'INV';
     const normCls = `${normalizeDocNo(e.doc_no)}~${cls}`;
+    const tax = round2(e.cgst + e.sgst + e.igst);
+    const inUploadedPeriod = e.periods.some((p) => gstrCoveredPeriods.has(p));
     let reason: EwbOnlyReason;
-    if (gstrNormSet.has(normCls)) reason = 'Reported in GSTR-1 of a different period (timing)';
-    else reason = 'Not reported in GSTR-1 (possible omission — review)';
-    ewb_only.push({ ...e, reason, total_tax: round2(e.cgst + e.sgst + e.igst) });
+    if (gstrNormSet.has(normCls)) {
+      reason = 'Reported in GSTR-1 of a different period (timing)';
+    } else if (!inUploadedPeriod) {
+      // Its invoice date belongs to a month whose GSTR-1 was not uploaded — timing, not omission.
+      reason = 'Invoice date in a period with no GSTR-1 uploaded (likely timing — upload that month’s GSTR-1)';
+    } else if (Math.abs(tax) < 1 && Math.abs(e.assessable) > 1) {
+      // Value moves but no tax charged (free-of-cost / warranty / sample) — not under-reporting.
+      reason = 'Zero-tax / free-of-cost movement (verify — not tax under-reporting)';
+    } else {
+      reason = 'Not reported in GSTR-1 (possible omission — review)';
+    }
+    ewb_only.push({ ...e, reason, total_tax: tax });
   });
 
   // ----- Summary -----
@@ -321,9 +362,31 @@ export const reconcile = (
   const ewbOnlyTaxExposure = round2(ewb_only
     .filter((r) => r.reason.startsWith('Not reported'))
     .reduce((s, r) => s + r.total_tax, 0));
-  const gstrOnlyMissingEwbValue = round2(gstr_only
-    .filter((r) => r.reason.startsWith('EWB likely required'))
-    .reduce((s, r) => s + Math.abs(r.assessable), 0));
+  const gstrMissingEwb = gstr_only.filter((r) => r.reason.startsWith('EWB likely required'));
+  const gstrOnlyMissingEwbValue = round2(gstrMissingEwb.reduce((s, r) => s + Math.abs(r.assessable), 0));
+
+  // EWB-only rows re-classified out of the under-reporting headline (timing / cross-period, zero-tax).
+  const ewbOnlyTimingRows = ewb_only.filter((r) => r.reason.includes('no GSTR-1 uploaded') || r.reason.includes('different period'));
+  const ewbOnlyTimingCount = ewbOnlyTimingRows.length;
+  const ewbOnlyTimingValue = round2(ewbOnlyTimingRows.reduce((s, r) => s + Math.abs(r.assessable), 0));
+  const ewbOnlyZeroTaxCount = ewb_only.filter((r) => r.reason.startsWith('Zero-tax')).length;
+
+  // Incomplete-EWB-upload detector: of the GSTR-1 documents that genuinely need an EWB
+  // (taxable goods, above threshold), what share actually found one? A low ratio almost
+  // always means the E-Way Bill export was partial, not that EWBs were never generated.
+  const matchedCount = completely_matched.length + variances.length;
+  const needEwbTotal = matchedCount + gstrMissingEwb.length;
+  const ewbCoverageRatio = needEwbTotal > 0 ? round2(matchedCount / needEwbTotal) : 1;
+  const ewbFileLikelyIncomplete = gstrMissingEwb.length >= 20 && ewbCoverageRatio < 0.7;
+  if (ewbFileLikelyIncomplete) {
+    warnings.push(
+      `E-Way Bill file appears INCOMPLETE: ${gstrMissingEwb.length} taxable goods invoices ` +
+      `(₹${gstrOnlyMissingEwbValue.toLocaleString('en-IN')} assessable) have no matching EWB — ` +
+      `only ${Math.round(ewbCoverageRatio * 100)}% of EWB-requiring invoices matched. ` +
+      `Re-export the FULL e-way bill list for the exact return period (all sub-users) and re-run ` +
+      `before treating this as a compliance gap.`
+    );
+  }
   const timingDifferenceCount =
     variances.filter((r) => r.flags.some((f) => f.startsWith('Timing'))).length +
     gstr_only.filter((r) => r.reason.includes('timing')).length +
@@ -375,6 +438,12 @@ export const reconcile = (
     timingDifferenceCount,
     taxTypeMismatchCount,
     gstinMismatchCount,
+    ewbOnlyTimingCount,
+    ewbOnlyTimingValue,
+    ewbOnlyZeroTaxCount,
+    ewbFileLikelyIncomplete,
+    ewbCoverageRatio,
+    gstrMissingEwbCount: gstrMissingEwb.length,
     perPeriod,
   };
 
