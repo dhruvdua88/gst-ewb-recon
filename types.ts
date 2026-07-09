@@ -175,6 +175,8 @@ export type GstrOnlyReason =
   | 'Below EWB threshold (no EWB required)'
   | 'Service supply (no EWB required)'
   | 'Export / SEZ supply — verify EWB via shipping/port docs'
+  | 'Goods appear to have moved under a delivery challan / consolidated EWB (verify)'
+  | 'No EWB in the uploaded file — EWB export looks incomplete (re-export full period)'
   | 'Credit/Debit note (verify EWB)'
   | 'Found in EWB but different period (timing)';
 

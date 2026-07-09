@@ -2,6 +2,22 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.5.0] — 2026-07-09
+
+### Changed
+- **Honest classification of "Only in GSTR-1".** The big "EWB likely required — not
+  found" bucket was reading as hundreds of compliance breaches when the real cause is
+  a partial EWB export. Two improvements:
+  - **Delivery-challan / consolidated-EWB cross-match** — a GSTR invoice whose goods
+    actually moved under a delivery challan (or a cancelled/other EWB) for the same
+    buyer + value (±2%) is now labelled "Goods appear to have moved under a delivery
+    challan / consolidated EWB (verify)" instead of "missing EWB".
+  - **Incomplete-export re-label** — when coverage is low (<70%), the remaining
+    unmatched invoices are labelled "No EWB in the uploaded file — EWB export looks
+    incomplete (re-export full period)" rather than implying non-generation.
+  On the 4-period dataset the 498 "EWB likely required" split into 26 challan-moved +
+  472 incomplete-export, so the list no longer reads as 498 violations.
+
 ## [1.4.1] — 2026-07-09
 
 ### Changed

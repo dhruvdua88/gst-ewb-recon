@@ -309,6 +309,25 @@ export const reconcile = (
     }
   });
 
+  // Index of NON-invoice goods movements — delivery challans and cancelled EWBs — by
+  // buyer GSTIN, so a GSTR invoice whose goods actually moved under a challan / a
+  // consolidated EWB (very common for stock transfers to site) is not mis-flagged as a
+  // missing e-way bill. Matched on GSTIN + assessable value within a small tolerance.
+  const movementByGstin = new Map<string, number[]>();
+  const addMove = (gstin: string, v: number) => {
+    if (!usableGstin(gstin)) return;
+    (movementByGstin.get(gstin) || movementByGstin.set(gstin, []).get(gstin)!).push(Math.abs(v));
+  };
+  deliveryChallans.forEach((d) => addMove(d.other_party_gstin, d.assessable));
+  cancelled.forEach((d) => addMove(d.other_party_gstin, d.assessable));
+  const movedUnderChallan = (gstin: string, assessable: number): boolean => {
+    const vals = movementByGstin.get(gstin);
+    if (!vals) return false;
+    const a = Math.abs(assessable);
+    const tol = Math.max(cfg.assessableTolerance, a * 0.02); // ±2% or the configured rupee tol
+    return vals.some((v) => Math.abs(v - a) <= tol);
+  };
+
   // GSTR-only (unmatched GSTR aggs)
   const matchedGstrKeys = new Set([...completely_matched, ...variances].map((r) => r.key));
   const gstr_only: GstrOnlyRow[] = [];
@@ -322,6 +341,8 @@ export const reconcile = (
     else if (isNoteCat(g.category)) reason = 'Credit/Debit note (verify EWB)';
     else if (g.category === 'EXP' || g.category === 'SEZ') reason = 'Export / SEZ supply — verify EWB via shipping/port docs';
     else if (Math.abs(g.invoice_value) <= cfg.ewbThreshold) reason = 'Below EWB threshold (no EWB required)';
+    else if (usableGstin(g.buyer_gstin) && movedUnderChallan(g.buyer_gstin, g.assessable))
+      reason = 'Goods appear to have moved under a delivery challan / consolidated EWB (verify)';
     else reason = 'EWB likely required — not found (review)';
     gstr_only.push({ ...g, reason, total_tax: round2(g.cgst + g.sgst + g.igst) });
   });
@@ -435,6 +456,11 @@ export const reconcile = (
       `Re-export the FULL e-way bill list for the exact return period (all sub-users) and re-run ` +
       `before treating this as a compliance gap.`
     );
+    // Soften the per-row reason so the list doesn't read as N confirmed compliance breaches —
+    // when coverage is this low the dominant cause is a partial EWB export, not non-generation.
+    gstrMissingEwb.forEach((r) => {
+      r.reason = 'No EWB in the uploaded file — EWB export looks incomplete (re-export full period)';
+    });
   }
   const timingDifferenceCount =
     variances.filter((r) => r.flags.some((f) => f.startsWith('Timing'))).length +
