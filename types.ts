@@ -230,6 +230,18 @@ export interface PeriodSummary {
   taxAtRisk: number;
 }
 
+export interface PeriodCoverage {
+  period: string;    // YYYY-MM
+  hasGstr: boolean;  // a GSTR-1 was uploaded covering this period
+  hasEwb: boolean;   // e-way bill rows exist for this period
+}
+
+export interface MissingGstrPeriod {
+  period: string;        // EWB period with no GSTR-1 uploaded
+  ewbTimingCount: number; // EWB-only rows in that period that would likely resolve
+  ewbTimingValue: number; // assessable of those rows
+}
+
 export interface SummaryData {
   periods: string[];
   // Per-source coverage (what each uploaded file actually spans).
@@ -265,6 +277,9 @@ export interface SummaryData {
   ewbFileLikelyIncomplete: boolean; // true when many taxable goods invoices have no EWB
   ewbCoverageRatio: number;         // matched / (matched + GSTR "EWB likely required") , 0..1
   gstrMissingEwbCount: number;      // count of GSTR docs flagged "EWB likely required — not found"
+  // Multi-period coverage: which periods each source spans, and where a GSTR-1 is missing.
+  coverage: PeriodCoverage[];
+  missingGstrPeriods: MissingGstrPeriod[];
   perPeriod: PeriodSummary[];
 }
 

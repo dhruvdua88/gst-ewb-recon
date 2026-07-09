@@ -151,6 +151,13 @@ export const generateHtmlReport = (summary: SummaryData, report: ReconciliationR
             (all sub-users) for the exact return period and re-run before treating the figure below as a compliance gap.
           </div>
         </div>` : ''}
+        ${summary.missingGstrPeriods.length ? `
+        <div style="margin:14px 0;padding:12px 14px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;">
+          <div style="font-weight:700;color:#78350f;font-size:13px;">➕ Add a GSTR-1 to resolve timing differences</div>
+          <ul style="font-size:12px;color:#92400e;line-height:1.5;margin:4px 0 0;padding-left:18px;">
+            ${summary.missingGstrPeriods.map((m) => `<li><strong>${periodLabel(m.period)}</strong> — ${num(m.ewbTimingCount)} e-way bill doc(s) worth ${inr(m.ewbTimingValue)} fall in this month, but its GSTR-1 was not uploaded. Add ${periodLabel(m.period)} GSTR-1 and re-run to confirm they were reported.</li>`).join('')}
+          </ul>
+        </div>` : ''}
         ${summary.ewbOnlyTimingCount ? `
         <div style="margin:14px 0;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12px;color:#1e40af;line-height:1.5;">
           <strong>${num(summary.ewbOnlyTimingCount)}</strong> EWB-only document(s) worth

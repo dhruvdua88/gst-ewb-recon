@@ -85,6 +85,41 @@ export function SummaryView({ summary, report, onDownloadExcel, onDownloadHtml }
         </div>
       )}
 
+      {summary.missingGstrPeriods.length > 0 && (
+        <div className="mb-4 bg-amber-50 border border-amber-300 rounded-lg p-4">
+          <p className="font-semibold text-amber-900">➕ Add a GSTR-1 to resolve timing differences</p>
+          <ul className="text-sm text-amber-800 mt-1 space-y-0.5 list-disc list-inside">
+            {summary.missingGstrPeriods.map((m) => (
+              <li key={m.period}>
+                <b>{periodLabel(m.period)}</b> — {num(m.ewbTimingCount)} e-way bill doc(s) worth {inr(m.ewbTimingValue)} are
+                in this month, but its GSTR-1 was not uploaded. Add <b>{periodLabel(m.period)} GSTR-1</b> and re-run to confirm
+                they were reported.
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {summary.coverage.length > 0 && (
+        <div className="mb-4">
+          <h3 className="font-semibold text-gray-700 mb-2 text-sm">Period coverage</h3>
+          <div className="flex flex-wrap gap-2">
+            {summary.coverage.map((c) => {
+              const both = c.hasGstr && c.hasEwb;
+              const cls = both ? 'bg-green-50 border-green-300 text-green-800'
+                : 'bg-amber-50 border-amber-300 text-amber-800';
+              return (
+                <div key={c.period} className={`border rounded-lg px-3 py-1.5 text-xs ${cls}`}>
+                  <span className="font-semibold">{periodLabel(c.period)}</span>
+                  <span className="ml-2">GSTR-1 {c.hasGstr ? '✓' : '✗'}</span>
+                  <span className="ml-2">EWB {c.hasEwb ? '✓' : '✗'}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {summary.ewbOnlyTimingCount > 0 && (
         <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
           <b>{num(summary.ewbOnlyTimingCount)}</b> EWB-only document(s) worth <b>{inr(summary.ewbOnlyTimingValue)}</b> were

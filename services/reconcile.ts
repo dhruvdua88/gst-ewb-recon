@@ -365,6 +365,33 @@ export const reconcile = (
   const gstrMissingEwb = gstr_only.filter((r) => r.reason.startsWith('EWB likely required'));
   const gstrOnlyMissingEwbValue = round2(gstrMissingEwb.reduce((s, r) => s + Math.abs(r.assessable), 0));
 
+  // Period-coverage matrix + missing-GSTR-1 nudge. If an EWB period has no GSTR-1 uploaded,
+  // tell the user exactly which return to add and how much timing it would resolve.
+  const ewbPeriodSet = new Set<string>();
+  validEwb.forEach((d) => { if (d.period) ewbPeriodSet.add(d.period); });
+  const allPeriods = uniq([...gstrCoveredPeriods, ...ewbPeriodSet]).sort();
+  const coverage = allPeriods.map((p) => ({
+    period: p, hasGstr: gstrCoveredPeriods.has(p), hasEwb: ewbPeriodSet.has(p),
+  }));
+  const missingGstrPeriods = allPeriods
+    .filter((p) => ewbPeriodSet.has(p) && !gstrCoveredPeriods.has(p))
+    .map((p) => {
+      const rows = ewb_only.filter((r) => r.periods.includes(p) && r.reason.includes('no GSTR-1 uploaded'));
+      return {
+        period: p,
+        ewbTimingCount: rows.length,
+        ewbTimingValue: round2(rows.reduce((s, r) => s + Math.abs(r.assessable), 0)),
+      };
+    });
+  if (missingGstrPeriods.length) {
+    const list = missingGstrPeriods.map((m) => periodLabel(m.period)).join(', ');
+    const n = missingGstrPeriods.reduce((s, m) => s + m.ewbTimingCount, 0);
+    warnings.push(
+      `Missing GSTR-1 period(s): ${list}. ${n} e-way bill document(s) fall in month(s) whose GSTR-1 ` +
+      `was not uploaded — add those returns and re-run to confirm they were reported (removes them from timing).`
+    );
+  }
+
   // EWB-only rows re-classified out of the under-reporting headline (timing / cross-period, zero-tax).
   const ewbOnlyTimingRows = ewb_only.filter((r) => r.reason.includes('no GSTR-1 uploaded') || r.reason.includes('different period'));
   const ewbOnlyTimingCount = ewbOnlyTimingRows.length;
@@ -444,6 +471,8 @@ export const reconcile = (
     ewbFileLikelyIncomplete,
     ewbCoverageRatio,
     gstrMissingEwbCount: gstrMissingEwb.length,
+    coverage,
+    missingGstrPeriods,
     perPeriod,
   };
 
