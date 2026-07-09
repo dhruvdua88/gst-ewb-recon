@@ -2,6 +2,25 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.3.0] — 2026-07-09
+
+### Added
+- **Action Register** — a curated "do this" list (tab + Excel sheet + emailable
+  section) containing only items needing human action (genuine value mismatches,
+  truly-missing EWBs, missing GSTR-1 uploads), highest value first. Timing, FOC and
+  correct exclusions are omitted by design. When the EWB file looks incomplete, the
+  hundreds of likely-false "missing EWB" rows collapse into one "re-export" action.
+- **Filename period hints** — each uploaded file shows the return period guessed from
+  its name (pre-run UX aid only).
+
+### Changed
+- **Part-dispatch detection** — a matched document whose EWB value is *below* the
+  invoice is flagged "possible part-dispatch, verify remaining consignment" (vs a
+  blanket "assessable mismatch"); EWB above invoice is flagged "verify".
+- **Export / SEZ awareness** — export and SEZ invoices get their own reason
+  ("verify EWB via shipping/port docs") and no longer inflate the "EWB likely
+  required — not found" figure.
+
 ## [1.2.0] — 2026-07-09
 
 ### Added

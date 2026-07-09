@@ -98,6 +98,32 @@ export const digitsOnly = (raw: any): string => {
   return d || '';
 };
 
+/**
+ * Best-effort guess of the return period from a file name, for a pre-run UX hint only.
+ * Recognises "Apr 2026", "April26", "04-2026", "042026", "2026-04". Returns a label
+ * like "Apr 2026" or '' if nothing recognisable. NOT used for reconciliation logic.
+ */
+const MON_NAMES: Record<string, number> = {
+  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+};
+export const guessPeriodFromName = (name: string): string => {
+  const s = String(name || '').toLowerCase();
+  // month-name + year: "apr 2026" / "april-26" / "apr26"
+  const mn = s.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*[^0-9]?(\d{2,4})/);
+  if (mn) {
+    const mo = MON_NAMES[mn[1]];
+    const yr = mn[2].length === 2 ? 2000 + +mn[2] : +mn[2];
+    if (mo && yr >= 2017 && yr <= 2099) return periodLabel(`${yr}-${String(mo).padStart(2, '0')}`);
+  }
+  // yyyy-mm
+  let m = s.match(/(20\d{2})[-_ ]?(0[1-9]|1[0-2])(?!\d)/);
+  if (m) return periodLabel(`${m[1]}-${m[2]}`);
+  // mm-yyyy or mmyyyy
+  m = s.match(/(?<!\d)(0[1-9]|1[0-2])[-_ ]?(20\d{2})/);
+  if (m) return periodLabel(`${m[2]}-${m[1]}`);
+  return '';
+};
+
 export const normalizeGstin = (raw: any): string =>
   String(raw ?? '').toUpperCase().replace(/[^0-9A-Z]/g, '').trim();
 

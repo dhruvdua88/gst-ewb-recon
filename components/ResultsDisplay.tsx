@@ -10,13 +10,14 @@ interface Props {
   onDownloadHtml: () => void;
 }
 
-type TabKey = 'summary' | 'matched' | 'variances' | 'ewbOnly' | 'gstrOnly' | 'cancelled' | 'dc';
+type TabKey = 'summary' | 'action' | 'matched' | 'variances' | 'ewbOnly' | 'gstrOnly' | 'cancelled' | 'dc';
 
 export const ResultsDisplay: React.FC<Props> = ({ summary, reportData, onDownloadExcel, onDownloadHtml }) => {
   const [tab, setTab] = useState<TabKey>('summary');
 
   const tabs: { key: TabKey; label: string; count: number }[] = [
     { key: 'summary', label: 'Summary', count: -1 },
+    { key: 'action', label: '★ Action Register', count: reportData.action_register.length },
     { key: 'variances', label: 'Variances', count: reportData.variances.length },
     { key: 'ewbOnly', label: 'EWB Only', count: reportData.ewb_only.length },
     { key: 'gstrOnly', label: 'GSTR-1 Only', count: reportData.gstr_only.length },
@@ -26,6 +27,12 @@ export const ResultsDisplay: React.FC<Props> = ({ summary, reportData, onDownloa
   ];
 
   const cols = useMemo(() => {
+    const action: Column[] = [
+      { key: 'priority', title: 'Priority' }, { key: 'type', title: 'Action needed' },
+      { key: 'doc_no', title: 'Doc No' }, { key: 'party', title: 'Party / Period' },
+      { key: 'amount', title: 'Amount at stake', isMoney: true },
+      { key: 'action', title: 'What to do' }, { key: 'detail', title: 'Context' },
+    ];
     const matched: Column[] = [
       { key: 'doc_no', title: 'Doc No' }, { key: 'ewb_doc_no', title: 'EWB Doc No' },
       { key: 'doc_date', title: 'Date' }, { key: 'ewb_no', title: 'EWB No(s)' },
@@ -71,7 +78,7 @@ export const ResultsDisplay: React.FC<Props> = ({ summary, reportData, onDownloa
     ];
     const raw = (rows: any[]): Column[] =>
       Object.keys(rows[0]?.raw || {}).map((k) => ({ key: k, title: k, isNumeric: /value|amount|cgst|sgst|igst|cess/i.test(k) }));
-    return { matched, variances, ewbOnly, gstrOnly, cancelled: raw(reportData.cancelled_ewb), dc: raw(reportData.delivery_challans) };
+    return { action, matched, variances, ewbOnly, gstrOnly, cancelled: raw(reportData.cancelled_ewb), dc: raw(reportData.delivery_challans) };
   }, [reportData]);
 
   // flatten raw for cancelled/dc tables
@@ -80,6 +87,9 @@ export const ResultsDisplay: React.FC<Props> = ({ summary, reportData, onDownloa
   const content = () => {
     switch (tab) {
       case 'summary': return <SummaryView summary={summary} report={reportData} onDownloadExcel={onDownloadExcel} onDownloadHtml={onDownloadHtml} />;
+      case 'action': return reportData.action_register.length
+        ? <DataTable data={reportData.action_register} columns={cols.action} caption="The curated to-do list — only items needing human action, highest value first. Timing, free-of-cost and correct exclusions are omitted by design." />
+        : <div className="p-8 text-center text-green-700 font-semibold">✓ Nothing needs action — no genuine mismatches after timing, FOC and exclusions are removed.</div>;
       case 'matched': return <DataTable data={reportData.completely_matched} columns={cols.matched} caption="Documents in both sources that tie out within tolerance." />;
       case 'variances': return <DataTable data={reportData.variances} columns={cols.variances} caption="Matched documents with value, tax-type, GSTIN or timing differences (sorted by value at risk)." />;
       case 'ewbOnly': return <DataTable data={reportData.ewb_only} columns={cols.ewbOnly} caption="E-Way Bills with no matching GSTR-1 document — possible under-reporting (sorted by tax)." />;

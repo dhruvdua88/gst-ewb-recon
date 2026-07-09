@@ -8,6 +8,19 @@ import { generateHtmlReport } from './services/reportService';
 import type { SummaryData, ReconciliationResult, ReconConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { LogoIcon, DocumentIcon } from './components/Icons';
+import { guessPeriodFromName } from './services/utils';
+
+const FileHints = ({ files }: { files: File[] }) => {
+  if (files.length === 0) return null;
+  return (
+    <ul className="mt-1 text-xs text-gray-500 space-y-0.5">
+      {files.map((f, i) => {
+        const p = guessPeriodFromName(f.name);
+        return <li key={i} className="truncate">• {f.name}{p && <span className="ml-1 text-indigo-600 font-medium">→ {p}</span>}</li>;
+      })}
+    </ul>
+  );
+};
 
 interface ResultState {
   summary: SummaryData;
@@ -82,12 +95,18 @@ export default function App(): React.ReactNode {
         <main>
           <div className="max-w-4xl mx-auto bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-2">
-              <FileUploader title="GSTR-1 Offline JSON(s)" acceptedTypes=".json"
-                onFileSelect={(f) => { setGstrFiles(f ? Array.from(f) : []); reset(); }}
-                icon={<DocumentIcon className="h-10 w-10 text-blue-500" />} />
-              <FileUploader title="E-Way Bill Excel Report(s)" acceptedTypes=".xlsx, .xls"
-                onFileSelect={(f) => { setEwbFiles(f ? Array.from(f) : []); reset(); }}
-                icon={<DocumentIcon className="h-10 w-10 text-green-500" />} />
+              <div>
+                <FileUploader title="GSTR-1 Offline JSON(s)" acceptedTypes=".json"
+                  onFileSelect={(f) => { setGstrFiles(f ? Array.from(f) : []); reset(); }}
+                  icon={<DocumentIcon className="h-10 w-10 text-blue-500" />} />
+                <FileHints files={gstrFiles} />
+              </div>
+              <div>
+                <FileUploader title="E-Way Bill Excel Report(s)" acceptedTypes=".xlsx, .xls"
+                  onFileSelect={(f) => { setEwbFiles(f ? Array.from(f) : []); reset(); }}
+                  icon={<DocumentIcon className="h-10 w-10 text-green-500" />} />
+                <FileHints files={ewbFiles} />
+              </div>
             </div>
 
             <p className="text-xs text-gray-400 text-center mb-2">

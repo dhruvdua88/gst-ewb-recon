@@ -58,7 +58,7 @@ const setCell = (ws: any, r: number, c: number, v: any, s?: any, z?: string) => 
   if (z) ws[addr].z = z;
 };
 
-const MONEY_RE = /value|assessable|cgst|sgst|igst|cess|tax|var|risk|exposure/i;
+const MONEY_RE = /value|assessable|cgst|sgst|igst|cess|tax|var|risk|exposure|amount/i;
 const COUNT_RE = /count|docs|rows|^matched$|^variances$|only/i;
 const isMoneyCol = (h: string) => MONEY_RE.test(h) && !COUNT_RE.test(h);
 
@@ -176,6 +176,13 @@ export const exportExcel = (summary: SummaryData, report: ReconciliationResult) 
   const cfg = report.config;
 
   XLSX.utils.book_append_sheet(wb, buildSummarySheet(summary, cfg), 'Summary');
+
+  // Action Register first — the curated to-do list, so it opens right after Summary.
+  const actionHeaders = ['priority', 'type', 'doc_no', 'party', 'amount', 'action', 'detail'];
+  const actionWs = report.action_register.length
+    ? styledSheet(report.action_register, actionHeaders)
+    : XLSX.utils.aoa_to_sheet([['Action Register'], ['Nothing needs action — no genuine mismatches after timing, FOC and exclusions are removed.']]);
+  XLSX.utils.book_append_sheet(wb, actionWs, 'Action_Register');
 
   const periodHeaders = ['period', 'gstrDocs', 'ewbDocs', 'matched', 'variances', 'gstrOnly', 'ewbOnly', 'taxAtRisk'];
   const periodRows = summary.perPeriod.map((p) => ({ ...p, period: periodLabel(p.period) }));

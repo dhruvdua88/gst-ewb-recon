@@ -1,7 +1,7 @@
 import type {
   Gstr1File, ReconConfig, ReconciliationResult, SummaryData, PeriodSummary,
   ParsedGstrDoc, ParsedEwbDoc, AggGstr, AggEwb, MatchedRow, MatchConfidence,
-  GstrOnlyRow, GstrOnlyReason, EwbOnlyRow, EwbOnlyReason,
+  GstrOnlyRow, GstrOnlyReason, EwbOnlyRow, EwbOnlyReason, ActionItem,
 } from '../types';
 import { DEFAULT_CONFIG } from '../types';
 import { parseGstrFiles } from './parseGstr';
@@ -139,7 +139,12 @@ const buildMatchedRow = (
   const total_tax_var = round2(cgst_var + sgst_var + igst_var);
 
   const flags: string[] = [];
-  if (Math.abs(assessable_var) > cfg.assessableTolerance) flags.push('Assessable mismatch');
+  if (Math.abs(assessable_var) > cfg.assessableTolerance) {
+    // Directional: EWB below the invoice usually means a part-dispatch (more EWBs to
+    // follow / consolidated later) rather than a straight error; EWB above is over-declared.
+    if (assessable_var < 0) flags.push('EWB value below invoice — possible part-dispatch, verify remaining consignment');
+    else flags.push('EWB value above invoice — verify');
+  }
   if (Math.abs(cgst_var) > cfg.taxTolerance) flags.push('CGST mismatch');
   if (Math.abs(sgst_var) > cfg.taxTolerance) flags.push('SGST mismatch');
   if (Math.abs(igst_var) > cfg.taxTolerance) flags.push('IGST mismatch');
@@ -299,6 +304,7 @@ export const reconcile = (
     if (ewbNormSet.has(normCls)) reason = 'Found in EWB but different period (timing)';
     else if (g.is_service) reason = 'Service supply (no EWB required)';
     else if (isNoteCat(g.category)) reason = 'Credit/Debit note (verify EWB)';
+    else if (g.category === 'EXP' || g.category === 'SEZ') reason = 'Export / SEZ supply — verify EWB via shipping/port docs';
     else if (Math.abs(g.invoice_value) <= cfg.ewbThreshold) reason = 'Below EWB threshold (no EWB required)';
     else reason = 'EWB likely required — not found (review)';
     gstr_only.push({ ...g, reason, total_tax: round2(g.cgst + g.sgst + g.igst) });
@@ -481,9 +487,82 @@ export const reconcile = (
   ewb_only.sort((a, b) => b.total_tax - a.total_tax || Math.abs(b.assessable) - Math.abs(a.assessable));
   gstr_only.sort((a, b) => Math.abs(b.assessable) - Math.abs(a.assessable));
 
+  // ----- Action Register: the curated "do this" list, noise stripped -----
+  // Only items a human must act on; timing / FOC / exclusions are deliberately omitted.
+  const action_register: ActionItem[] = [];
+
+  // Genuine value/tax mismatches on matched documents.
+  variances.forEach((v) => {
+    action_register.push({
+      priority: 'High',
+      type: 'Value mismatch — correct EWB/invoice',
+      doc_no: v.doc_no,
+      party: v.buyer_gstin,
+      amount: v.abs_value_at_risk,
+      action: 'Reconcile the EWB and the tax invoice so their values tie (correct whichever is wrong).',
+      detail: v.remarks,
+    });
+  });
+
+  // EWBs genuinely absent from GSTR-1 (after timing / FOC already stripped out).
+  ewb_only.filter((r) => r.reason.startsWith('Not reported')).forEach((r) => {
+    action_register.push({
+      priority: 'High',
+      type: 'EWB not in GSTR-1 — report or confirm',
+      doc_no: r.doc_no,
+      party: r.other_party_gstin,
+      amount: r.total_tax,
+      action: 'Report this outward supply in GSTR-1, or confirm why it is excluded.',
+      detail: `EWB ${r.ewb_no} dated ${r.doc_dates}; not found in the uploaded GSTR-1.`,
+    });
+  });
+
+  // GSTR-1 invoices with no EWB. When the EWB file looks incomplete, collapse the whole
+  // set into a SINGLE "re-export" action rather than listing hundreds of likely-false rows.
+  if (ewbFileLikelyIncomplete) {
+    action_register.push({
+      priority: 'High',
+      type: 'Re-export full E-Way Bill list',
+      doc_no: '—',
+      party: '—',
+      amount: gstrOnlyMissingEwbValue,
+      action: 'Re-export the complete e-way bill list (all sub-users) for the exact return period and re-run.',
+      detail: `${gstrMissingEwb.length} taxable goods invoices have no EWB; only ${Math.round(ewbCoverageRatio * 100)}% coverage — the export is almost certainly partial.`,
+    });
+  } else {
+    gstrMissingEwb.forEach((g) => {
+      action_register.push({
+        priority: 'High',
+        type: 'EWB missing — generate or confirm exemption',
+        doc_no: g.doc_no,
+        party: g.buyer_gstin,
+        amount: Math.abs(g.assessable),
+        action: 'Generate the e-way bill (or attach it), or confirm a valid exemption.',
+        detail: `GSTR-1 invoice dated ${g.doc_date}, no matching EWB found.`,
+      });
+    });
+  }
+
+  // Missing GSTR-1 periods — upload to clear timing.
+  missingGstrPeriods.forEach((m) => {
+    action_register.push({
+      priority: 'Medium',
+      type: 'Upload the missing GSTR-1',
+      doc_no: '—',
+      party: periodLabel(m.period),
+      amount: m.ewbTimingValue,
+      action: `Upload ${periodLabel(m.period)} GSTR-1 and re-run to confirm these were reported.`,
+      detail: `${m.ewbTimingCount} EWB doc(s) fall in ${periodLabel(m.period)}, whose GSTR-1 was not uploaded.`,
+    });
+  });
+
+  const prioRank: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
+  action_register.sort((a, b) => prioRank[a.priority] - prioRank[b.priority] || b.amount - a.amount);
+
   const reportData: ReconciliationResult = {
     completely_matched, variances, ewb_only, gstr_only,
     cancelled_ewb: cancelled, delivery_challans: deliveryChallans,
+    action_register,
     config: cfg, warnings,
   };
 

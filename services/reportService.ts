@@ -97,6 +97,17 @@ export const generateHtmlReport = (summary: SummaryData, report: ReconciliationR
       <td style="${TDR}">${inr(r.invoice_value)}</td><td style="${TDR}">${inr(r.assessable)}</td>
     </tr>`).join('') || emptyRow(4, 'None');
 
+  const prioColor = (p: string) => (p === 'High' ? '#b91c1c' : p === 'Medium' ? '#b45309' : '#64748b');
+  const actionRows = report.action_register.slice(0, 15).map((a) => `
+    <tr>
+      <td style="${TD}"><span style="font-weight:700;color:${prioColor(a.priority)};">${a.priority}</span></td>
+      <td style="${TD}">${a.type}</td>
+      <td style="${TD}">${a.doc_no}</td>
+      <td style="${TD}">${a.party}</td>
+      <td style="${TDR}">${inr(a.amount)}</td>
+      <td style="${TD}">${a.action}</td>
+    </tr>`).join('') || emptyRow(6, '✓ Nothing needs action — no genuine mismatches after timing, FOC and exclusions.');
+
   const action = (n: string, title: string, body: string) => `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;margin-top:10px;">
       <tr><td style="padding:14px 16px;font-family:${FONT};">
@@ -172,6 +183,12 @@ export const generateHtmlReport = (summary: SummaryData, report: ReconciliationR
           card(inr(summary.gstrOnlyMissingEwbValue), 'GSTR value likely needing an EWB', '#4338ca'),
           card(num(summary.completelyMatched), 'Documents matched clean', '#15803d'),
         ])}
+
+        ${h2('★ Action Register — what to actually do')}
+        ${dataTable(
+          `<tr><th style="${TH}">Priority</th><th style="${TH}">Action needed</th><th style="${TH}">Doc No</th><th style="${TH}">Party / Period</th><th style="${THR}">Amount</th><th style="${TH}">What to do</th></tr>`,
+          actionRows)}
+        ${report.action_register.length > 15 ? `<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Showing top 15 of ${num(report.action_register.length)} — full list in the Excel “Action_Register” sheet.</div>` : ''}
 
         ${h2('📊 Counts')}
         ${cardGrid([

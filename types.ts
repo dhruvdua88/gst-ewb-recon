@@ -174,6 +174,7 @@ export type GstrOnlyReason =
   | 'EWB likely required — not found (review)'
   | 'Below EWB threshold (no EWB required)'
   | 'Service supply (no EWB required)'
+  | 'Export / SEZ supply — verify EWB via shipping/port docs'
   | 'Credit/Debit note (verify EWB)'
   | 'Found in EWB but different period (timing)';
 
@@ -283,6 +284,25 @@ export interface SummaryData {
   perPeriod: PeriodSummary[];
 }
 
+// A single, human-actionable item — the curated "do this" list, noise stripped.
+export type ActionPriority = 'High' | 'Medium' | 'Low';
+export type ActionType =
+  | 'Value mismatch — correct EWB/invoice'
+  | 'EWB missing — generate or confirm exemption'
+  | 'EWB not in GSTR-1 — report or confirm'
+  | 'Re-export full E-Way Bill list'
+  | 'Upload the missing GSTR-1';
+
+export interface ActionItem {
+  priority: ActionPriority;
+  type: ActionType;
+  doc_no: string;
+  party: string;      // buyer / other-party GSTIN or period
+  amount: number;     // rupees at stake (assessable or tax)
+  action: string;     // what to do
+  detail: string;     // why / context
+}
+
 export interface ReconciliationResult {
   completely_matched: MatchedRow[];
   variances: MatchedRow[];
@@ -290,6 +310,7 @@ export interface ReconciliationResult {
   gstr_only: GstrOnlyRow[];
   cancelled_ewb: ParsedEwbDoc[];
   delivery_challans: ParsedEwbDoc[];
+  action_register: ActionItem[];
   config: ReconConfig;
   warnings: string[];
 }
