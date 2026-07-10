@@ -2,6 +2,15 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.8.1] — 2026-07-10
+
+### Fixed
+- **Stale-cache self-heal.** Each deploy ships a new hashed bundle and deletes the old
+  one; a browser holding a cached index.html would then request a 404'd bundle and show
+  a blank page. index.html now carries a no-cache hint and an inline boot guard that, if
+  the app hasn't mounted shortly after load, does ONE cache-busting reload
+  (sessionStorage-guarded so it can never loop). No more "blank after a deploy".
+
 ## [1.8.0] — 2026-07-10
 
 ### Added

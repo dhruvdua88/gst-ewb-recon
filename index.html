@@ -7,6 +7,26 @@
     <!-- Fully self-contained: Tailwind, React and xlsx-js-style are all compiled into
          the bundle at build time. No runtime CDN, so the app loads and runs (including
          Excel export) even offline or on networks that block CDNs. -->
+    <meta http-equiv="Cache-Control" content="no-cache" />
+    <script>
+      // Self-heal a stale cached index.html. Each deploy ships a new hashed bundle and
+      // deletes the old one; a browser holding a cached index.html then requests a
+      // bundle that 404s and the page stays blank. If the app hasn't mounted a moment
+      // after load, force ONE cache-busting reload (guarded by sessionStorage so it
+      // can never loop).
+      (function () {
+        var KEY = 'ewb-recon-reloaded';
+        window.addEventListener('load', function () {
+          setTimeout(function () {
+            var root = document.getElementById('root');
+            if (root && root.childElementCount === 0 && !sessionStorage.getItem(KEY)) {
+              sessionStorage.setItem(KEY, '1');
+              location.replace(location.pathname + '?_cb=' + Date.now());
+            }
+          }, 3500);
+        });
+      })();
+    </script>
   </head>
   <body class="bg-gray-100">
     <div id="root"></div>
