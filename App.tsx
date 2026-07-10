@@ -13,7 +13,7 @@ import { periodFromFp, periodLabel } from './services/utils';
 // Merge newly-picked files into the existing list (dedupe by name+size) so periods
 // can be added across several clicks / folders instead of each pick replacing the last.
 const fileKey = (f: File) => `${f.name}:${f.size}:${f.lastModified}`;
-const mergeFiles = (existing: File[], picked: FileList | null): File[] => {
+const mergeFiles = (existing: File[], picked: File[] | FileList | null): File[] => {
   if (!picked) return existing;
   // Dedupe on name+size+lastModified — GST-portal exports for different months often
   // share the SAME filename (e.g. returns_..._0.json), so name alone would drop one.
@@ -60,9 +60,8 @@ export default function App(): React.ReactNode {
       const jsons = files.filter((f) => /\.json$/i.test(f.name));
       const excels = files.filter((f) => /\.(xlsx?|xls)$/i.test(f.name));
       const other = files.filter((f) => !/\.(json|xlsx?|xls)$/i.test(f.name));
-      const toList = (arr: File[]) => { const dt = new DataTransfer(); arr.forEach((f) => dt.items.add(f)); return dt.files; };
-      if (jsons.length) setGstrFiles((prev) => mergeFiles(prev, toList(jsons)));
-      if (excels.length) setEwbFiles((prev) => mergeFiles(prev, toList(excels)));
+      if (jsons.length) setGstrFiles((prev) => mergeFiles(prev, jsons));
+      if (excels.length) setEwbFiles((prev) => mergeFiles(prev, excels));
       if (jsons.length || excels.length) { setResult(null); setError(null); }
       if (other.length) setError(`Ignored ${other.length} unsupported file(s): ${other.map((f) => f.name).join(', ')} — only .json (GSTR-1) and .xls/.xlsx (E-Way Bill) are accepted.`);
     };

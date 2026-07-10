@@ -2,6 +2,14 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [2.0.1] — 2026-07-10
+
+### Fixed
+- **Upload showed no files (click OR drag).** The file input was reset (value = '')
+  synchronously in onChange, but the file list is added via an async setState updater —
+  which then read the now-emptied live FileList and dropped every picked file. Files are
+  now snapshotted into an array before the reset, so both click-to-upload and drag work.
+
 ## [2.0.0] — 2026-07-10
 
 ### Changed — rebuilt the presentation layer on the vetted React power-stack

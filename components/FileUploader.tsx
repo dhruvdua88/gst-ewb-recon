@@ -7,7 +7,7 @@ interface FileUploaderProps {
   acceptedTypes: string;
   icon: React.ReactNode;
   files: File[];                          // merged list (source of truth, owned by parent)
-  onAdd: (files: FileList | null) => void; // append newly-picked files
+  onAdd: (files: File[]) => void;         // append newly-picked files (already snapshotted)
   onRemove: (index: number) => void;      // drop one file
   onClear: () => void;                    // drop all
   periodLabels?: string[];                // optional per-file period (overrides filename guess)
@@ -21,7 +21,9 @@ export function FileUploader({
 
   const onDrop = (e: React.DragEvent<HTMLLabelElement>) => {
     e.preventDefault(); e.stopPropagation(); setIsDragging(false);
-    if (e.dataTransfer.files?.length) onAdd(e.dataTransfer.files);
+    // Snapshot into an array immediately — the live FileList is emptied the moment the
+    // input is reset / drop ends, but the async setState updater reads it later.
+    if (e.dataTransfer.files?.length) onAdd(Array.from(e.dataTransfer.files));
   };
 
   return (
@@ -37,7 +39,14 @@ export function FileUploader({
         <h3 className="text-lg font-semibold text-gray-700">{title}</h3>
         <input
           type="file" className="hidden" accept={acceptedTypes} multiple ref={inputRef}
-          onChange={(e) => { onAdd(e.target.files); if (inputRef.current) inputRef.current.value = ''; }}
+          onChange={(e) => {
+            // Copy the FileList to an array BEFORE clearing the input — clearing the
+            // input value empties the live FileList, and the parent's async setState
+            // reads it after that, which previously dropped every picked file.
+            const picked = e.target.files ? Array.from(e.target.files) : [];
+            if (inputRef.current) inputRef.current.value = '';
+            if (picked.length) onAdd(picked);
+          }}
         />
         <div className="mt-2 text-sm text-gray-500">
           <span className="font-semibold text-indigo-600">{files.length ? 'Add more files' : 'Click to upload'}</span> or drag &amp; drop
