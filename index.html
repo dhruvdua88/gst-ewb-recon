@@ -4,7 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GST &mdash; E-Way Bill vs GSTR-1 Reconciliation (Multi-Period)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind is now compiled into the bundle at build time (see index.css /
+         tailwind.config.js) — no runtime CDN, so the UI always styles correctly even
+         on networks that block cdn.tailwindcss.com. -->
     <!-- xlsx-js-style: drop-in SheetJS fork that honours cell styles (fills, fonts,
          borders, number formats) on write — the plain community build ignores them. -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
