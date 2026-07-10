@@ -1,7 +1,7 @@
 import type { SummaryData, ReconciliationResult } from '../types';
 import { periodLabel } from './utils';
 
-declare const XLSX: any; // xlsx-js-style from CDN — honours cell.s styles
+import XLSX from './xlsx';
 
 const fmtMoney = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 

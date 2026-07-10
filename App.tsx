@@ -205,6 +205,7 @@ export default function App(): React.ReactNode {
 
         <footer className="text-center text-xs text-gray-400 mt-10">
           Runs entirely in your browser — no file ever leaves your machine.
+          <span className="ml-2 text-gray-300">v{__APP_VERSION__}</span>
         </footer>
       </div>
     </div>

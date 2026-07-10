@@ -4,22 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GST &mdash; E-Way Bill vs GSTR-1 Reconciliation (Multi-Period)</title>
-    <!-- Tailwind is now compiled into the bundle at build time (see index.css /
-         tailwind.config.js) — no runtime CDN, so the UI always styles correctly even
-         on networks that block cdn.tailwindcss.com. -->
-    <!-- xlsx-js-style: drop-in SheetJS fork that honours cell styles (fills, fonts,
-         borders, number formats) on write — the plain community build ignores them. -->
-    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-    <link rel="stylesheet" href="/index.css" />
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@^19.1.1",
-          "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
-          "react/": "https://esm.sh/react@^19.1.1/"
-        }
-      }
-    </script>
+    <!-- Fully self-contained: Tailwind, React and xlsx-js-style are all compiled into
+         the bundle at build time. No runtime CDN, so the app loads and runs (including
+         Excel export) even offline or on networks that block CDNs. -->
   </head>
   <body class="bg-gray-100">
     <div id="root"></div>

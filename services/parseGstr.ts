@@ -1,5 +1,5 @@
 import type { Gstr1File, Gstr1Invoice, ParsedGstrDoc, DocCategory } from '../types';
-import { parseNumber, formatDate, periodFromDate, periodFromFp } from './utils';
+import { parseNumber, formatDate, periodFromDate, periodFromFp, normalizeGstin } from './utils';
 
 interface RawSection {
   section: string;
@@ -83,7 +83,7 @@ export const parseGstrFiles = (files: Gstr1File[]): { docs: ParsedGstrDoc[]; war
           doc_date: docDate,
           period,
           fp: f.fp || '',
-          buyer_gstin: sec.ctin || 'N/A',
+          buyer_gstin: sec.ctin ? normalizeGstin(sec.ctin) : 'N/A',
           place_of_supply: String(inv.pos ?? ''),
           rchrg: (inv.rchrg as 'Y' | 'N') || 'N',
           invoice_value: parseNumber(inv.val) * sign,

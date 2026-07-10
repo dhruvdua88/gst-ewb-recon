@@ -1,7 +1,7 @@
 import type { ParsedEwbDoc } from '../types';
 import { parseNumber, formatDate, periodFromDate, normalizeGstin } from './utils';
 
-declare const XLSX: any; // from CDN
+import XLSX from './xlsx';
 
 type ColMap = Record<string, number>;
 
@@ -175,19 +175,24 @@ export const parseEwbFiles = (
       if (!docNo) continue; // skip total/footer rows with no doc no
 
       const docDate = formatDate(at(row, 'docDate'));
+      const docType = String(at(row, 'docType') ?? '').trim();
+      // A credit-note EWB reduces the outward value — carry it as negative so it matches
+      // the GSTR-1 credit note (CDNR_C), which the engine also carries negative. Without
+      // this the two show as a sign variance and never reconcile.
+      const sign = /credit\s*note/i.test(docType) ? -1 : 1;
       const doc: ParsedEwbDoc = {
         doc_no: docNo,
         doc_date: docDate,
         period: periodFromDate(docDate),
-        doc_type: String(at(row, 'docType') ?? '').trim(),
+        doc_type: docType,
         status: String(at(row, 'status') ?? '').trim(),
         other_party_gstin: normalizeGstin(at(row, 'otherGstin')),
         supply_type: String(at(row, 'supplyType') ?? '').trim(),
-        assessable: parseNumber(at(row, 'assessable')),
-        cgst: parseNumber(at(row, 'cgst')),
-        sgst: parseNumber(at(row, 'sgst')),
-        igst: parseNumber(at(row, 'igst')),
-        cess: parseNumber(at(row, 'cess')),
+        assessable: parseNumber(at(row, 'assessable')) * sign,
+        cgst: parseNumber(at(row, 'cgst')) * sign,
+        sgst: parseNumber(at(row, 'sgst')) * sign,
+        igst: parseNumber(at(row, 'igst')) * sign,
+        cess: parseNumber(at(row, 'cess')) * sign,
         ewb_no: stripQuote(at(row, 'ewbNo')),
         ewb_date: formatDate(at(row, 'ewbDate')),
         raw,
