@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Verify index.html references an asset that exists
+        run: |
+          BUNDLE=$(grep -o 'assets/index-[A-Za-z0-9_]*\.js' dist/index.html | head -1)
+          test -n "$BUNDLE" && test -f "dist/$BUNDLE" && echo "OK: $BUNDLE present" || (echo "index.html references missing asset $BUNDLE" && exit 1)

@@ -37,6 +37,7 @@ export default function App(): React.ReactNode {
   // Detected return period per GSTR file (read from the JSON `fp`) — the portal names
   // every month's export identically, so the filename can't tell them apart.
   const [gstrPeriods, setGstrPeriods] = useState<string[]>([]);
+  const [progress, setProgress] = useState('');
   // Whole-page drag state: without global handlers, a drop that misses the small
   // dashed box makes the browser NAVIGATE AWAY and open the file — the app "shows
   // nothing". We catch drags anywhere on the page, show an overlay, and route the
@@ -92,20 +93,24 @@ export default function App(): React.ReactNode {
       return;
     }
     setIsLoading(true); setError(null); setResult(null);
+    const yield_ = () => new Promise((r) => setTimeout(r, 0)); // let React paint the stage
     try {
+      setProgress(`Reading ${gstrFiles.length} GSTR-1 + ${ewbFiles.length} EWB file(s)…`); await yield_();
       const gstrTexts = await Promise.all(gstrFiles.map((f) => f.text()));
       const gstrJsons = gstrTexts.map((t, i) => {
         try { return JSON.parse(t); }
-        catch { throw new Error(`GSTR-1 file "${gstrFiles[i].name}" is not valid JSON.`); }
+        catch { throw new Error(`[File] GSTR-1 file "${gstrFiles[i].name}" is not valid JSON. Re-export it from the GST portal offline tool.`); }
       });
       const ewbBuffers = await Promise.all(ewbFiles.map((f) => f.arrayBuffer()));
+      setProgress('Matching documents & classifying differences…'); await yield_();
       const { summary, reportData } = reconcile(gstrJsons, ewbBuffers, config);
+      setProgress('Building results…'); await yield_();
       setResult({ summary, reportData });
     } catch (e) {
       console.error(e);
       setError(`Processing failed: ${e instanceof Error ? e.message : 'unknown error'}`);
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); setProgress('');
     }
   }, [gstrFiles, ewbFiles, config]);
 
@@ -188,7 +193,7 @@ export default function App(): React.ReactNode {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Processing...
+                    {progress || 'Processing…'}
                   </>
                 ) : 'Reconcile'}
               </button>
