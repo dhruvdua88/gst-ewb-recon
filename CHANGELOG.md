@@ -2,6 +2,23 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.8.0] — 2026-07-10
+
+### Added
+- **Self-contained build** — Tailwind, React and xlsx-js-style are all bundled at build
+  time; zero runtime CDNs, so the app (including Excel export) works offline / on
+  CDN-blocked networks.
+- **Golden tests** (vitest) for the reconciliation engine — collision fix, timing,
+  below-threshold, recipient/ex-works, exclusions. `npm test`.
+- **Table sort / search / pagination** — every results table sorts on any column
+  (numeric-aware), filters by free text, and paginates 50/page.
+- **Staged progress** during reconciliation; **error boundary** (no white screen);
+  app **version in the footer**; **Top buyers driving the difference** panel.
+
+### Fixed
+- EWB **credit-note sign** (matches CDNR_C instead of a sign variance); **GSTIN
+  normalised at GSTR-1 parse** to kill case mismatches.
+
 ## [1.7.0] — 2026-07-10
 
 ### Fixed
