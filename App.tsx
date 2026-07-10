@@ -37,8 +37,45 @@ export default function App(): React.ReactNode {
   // Detected return period per GSTR file (read from the JSON `fp`) — the portal names
   // every month's export identically, so the filename can't tell them apart.
   const [gstrPeriods, setGstrPeriods] = useState<string[]>([]);
+  // Whole-page drag state: without global handlers, a drop that misses the small
+  // dashed box makes the browser NAVIGATE AWAY and open the file — the app "shows
+  // nothing". We catch drags anywhere on the page, show an overlay, and route the
+  // dropped files to the right box by extension.
+  const [pageDragging, setPageDragging] = useState(false);
 
   const reset = () => { setResult(null); setError(null); };
+
+  useEffect(() => {
+    let depth = 0;
+    const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types || []).includes('Files');
+    const onEnter = (e: DragEvent) => { if (!hasFiles(e)) return; e.preventDefault(); depth++; setPageDragging(true); };
+    const onOver = (e: DragEvent) => { if (hasFiles(e)) e.preventDefault(); };
+    const onLeave = (e: DragEvent) => { if (!hasFiles(e)) return; depth = Math.max(0, depth - 1); if (depth === 0) setPageDragging(false); };
+    const onDrop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); depth = 0; setPageDragging(false);
+      const files = Array.from(e.dataTransfer?.files || []);
+      if (!files.length) return;
+      const jsons = files.filter((f) => /\.json$/i.test(f.name));
+      const excels = files.filter((f) => /\.(xlsx?|xls)$/i.test(f.name));
+      const other = files.filter((f) => !/\.(json|xlsx?|xls)$/i.test(f.name));
+      const toList = (arr: File[]) => { const dt = new DataTransfer(); arr.forEach((f) => dt.items.add(f)); return dt.files; };
+      if (jsons.length) setGstrFiles((prev) => mergeFiles(prev, toList(jsons)));
+      if (excels.length) setEwbFiles((prev) => mergeFiles(prev, toList(excels)));
+      if (jsons.length || excels.length) { setResult(null); setError(null); }
+      if (other.length) setError(`Ignored ${other.length} unsupported file(s): ${other.map((f) => f.name).join(', ')} — only .json (GSTR-1) and .xls/.xlsx (E-Way Bill) are accepted.`);
+    };
+    window.addEventListener('dragenter', onEnter);
+    window.addEventListener('dragover', onOver);
+    window.addEventListener('dragleave', onLeave);
+    window.addEventListener('drop', onDrop);
+    return () => {
+      window.removeEventListener('dragenter', onEnter);
+      window.removeEventListener('dragover', onOver);
+      window.removeEventListener('dragleave', onLeave);
+      window.removeEventListener('drop', onDrop);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +132,15 @@ export default function App(): React.ReactNode {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
+      {pageDragging && (
+        <div className="fixed inset-0 z-50 bg-indigo-600/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="bg-white border-4 border-dashed border-indigo-500 rounded-2xl px-12 py-10 text-center shadow-2xl">
+            <div className="text-5xl mb-3">📂</div>
+            <div className="text-2xl font-bold text-indigo-700">Drop files anywhere</div>
+            <div className="text-sm text-gray-600 mt-2">.json → GSTR-1 &nbsp;·&nbsp; .xls / .xlsx → E-Way Bill</div>
+          </div>
+        </div>
+      )}
       <div className="container mx-auto p-4 sm:p-6 lg:p-8">
         <header className="text-center mb-8">
           <div className="flex items-center justify-center gap-4 mb-2">

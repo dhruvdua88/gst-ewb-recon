@@ -2,6 +2,16 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [1.7.0] — 2026-07-10
+
+### Fixed
+- **Drops that miss the box no longer vanish.** Dropping a file outside the small
+  dashed dropzone previously triggered the browser default — navigating away to open
+  the file, so "nothing showed". The whole page is now a drop target: a full-screen
+  "Drop files anywhere" overlay appears while dragging, and dropped files auto-route
+  by extension (.json → GSTR-1, .xls/.xlsx → E-Way Bill). Unsupported files produce a
+  clear message instead of silence. package.json version aligned with the changelog.
+
 ## [1.6.0] — 2026-07-09
 
 ### Changed
