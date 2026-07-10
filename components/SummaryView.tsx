@@ -2,6 +2,7 @@ import React from 'react';
 import type { SummaryData, ReconciliationResult } from '../types';
 import { periodLabel } from '../services/utils';
 import { DownloadIcon, CheckCircleIcon, MailIcon } from './Icons';
+import { Dashboard } from './Dashboard';
 
 interface Props {
   summary: SummaryData;
@@ -151,6 +152,8 @@ export function SummaryView({ summary, report, onDownloadExcel, onDownloadHtml }
         <Card label="GSTR value likely needing EWB" value={inr(summary.gstrOnlyMissingEwbValue)} />
         <Card label="Matched clean" value={num(summary.completelyMatched)} tone="ok" />
       </div>
+
+      <Dashboard summary={summary} report={report} />
 
       {report.warnings.length > 0 && (
         <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg p-4 text-sm text-amber-800">

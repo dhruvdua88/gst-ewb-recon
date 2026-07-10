@@ -1,7 +1,7 @@
 {
   "name": "gst-ewb-recon",
   "private": true,
-  "version": "1.8.1",
+  "version": "2.0.0",
   "type": "module",
   "description": "Multi-period reconciliation of GSTR-1 (B2B/EXP/CDNR/SEZ) against E-Way Bill data, with timing-difference, tax-type and threshold-aware logic and an actionable report.",
   "scripts": {
@@ -13,6 +13,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "ag-grid-community": "^36.0.0",
+    "ag-grid-react": "^36.0.0",
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "xlsx-js-style": "^1.2.0"

@@ -2,6 +2,21 @@
 
 All notable changes to the E-Way Bill vs GSTR-1 reconciliation tool.
 
+## [2.0.0] — 2026-07-10
+
+### Changed — rebuilt the presentation layer on the vetted React power-stack
+- **AG Grid** (Community) replaces the hand-rolled results tables across every tab —
+  per-column sort + floating filters, quick-search, pagination (25/50/100/200), CSV
+  export, cell text selection. Handles 100k+ rows smoothly.
+- **ECharts dashboard** on the Summary — period-wise position (stacked bars), what
+  drives "Only in GSTR-1" (reason pie), and top buyers by value (bar).
+- **Code-split for fast first paint** — the upload screen now ships a ~210 KB bundle
+  (was 3.4 MB); xlsx (~850 KB), the reconcile engine, AG Grid + ECharts, and the export
+  services all load on demand (at reconcile / when results show).
+- The reconciliation engine, parsers, Excel/HTML exports and the 6 golden tests are
+  unchanged — the domain logic (timing, recipient-EWB, collision fix, challan
+  cross-match) is preserved intact.
+
 ## [1.8.1] — 2026-07-10
 
 ### Fixed

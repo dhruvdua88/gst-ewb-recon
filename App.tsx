@@ -1,10 +1,10 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import { FileUploader } from './components/FileUploader';
-import { ResultsDisplay } from './components/ResultsDisplay';
 import { SettingsPanel } from './components/SettingsPanel';
-import { reconcile } from './services/reconcile';
-import { exportExcel } from './services/excelService';
-import { generateHtmlReport } from './services/reportService';
+
+// Heavy results UI (AG Grid + ECharts) is code-split — the upload screen paints fast,
+// and these load only once there are results to show.
+const ResultsDisplay = lazy(() => import('./components/ResultsDisplay').then((m) => ({ default: m.ResultsDisplay })));
 import type { SummaryData, ReconciliationResult, ReconConfig } from './types';
 import { DEFAULT_CONFIG } from './types';
 import { LogoIcon, DocumentIcon } from './components/Icons';
@@ -103,6 +103,7 @@ export default function App(): React.ReactNode {
       });
       const ewbBuffers = await Promise.all(ewbFiles.map((f) => f.arrayBuffer()));
       setProgress('Matching documents & classifying differences…'); await yield_();
+      const { reconcile } = await import('./services/reconcile');
       const { summary, reportData } = reconcile(gstrJsons, ewbBuffers, config);
       setProgress('Building results…'); await yield_();
       setResult({ summary, reportData });
@@ -116,21 +117,24 @@ export default function App(): React.ReactNode {
 
   const handleExcel = () => {
     if (!result) return;
-    try { exportExcel(result.summary, result.reportData); }
-    catch (e) { setError(`Excel export failed: ${e instanceof Error ? e.message : 'unknown'}`); }
+    (async () => { try { const { exportExcel } = await import('./services/excelService'); exportExcel(result.summary, result.reportData); }
+    catch (e) { setError(`Excel export failed: ${e instanceof Error ? e.message : 'unknown'}`); } })();
   };
 
   const handleHtml = () => {
     if (!result) return;
-    try {
-      const html = generateHtmlReport(result.summary, result.reportData);
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'EWB_GSTR1_Summary.html';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch { setError('Failed to generate HTML report.'); }
+    (async () => {
+      try {
+        const { generateHtmlReport } = await import('./services/reportService');
+        const html = generateHtmlReport(result.summary, result.reportData);
+        const blob = new Blob([html], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'EWB_GSTR1_Summary.html';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch { setError('Failed to generate HTML report.'); }
+    })();
   };
 
   const canRun = gstrFiles.length > 0 && ewbFiles.length > 0 && !isLoading;
@@ -202,8 +206,10 @@ export default function App(): React.ReactNode {
 
           {result && !isLoading && !error && (
             <div className="mt-8">
-              <ResultsDisplay summary={result.summary} reportData={result.reportData}
-                onDownloadExcel={handleExcel} onDownloadHtml={handleHtml} />
+              <Suspense fallback={<div className="text-center text-gray-500 py-10">Loading results view…</div>}>
+                <ResultsDisplay summary={result.summary} reportData={result.reportData}
+                  onDownloadExcel={handleExcel} onDownloadHtml={handleHtml} />
+              </Suspense>
             </div>
           )}
         </main>

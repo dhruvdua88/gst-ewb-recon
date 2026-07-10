@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { SummaryView } from './SummaryView';
 import { DataTable, type Column } from './DataTable';
+import { RecoGrid } from './RecoGrid';
 import type { ReconciliationResult, SummaryData } from '../types';
 
 interface Props {
@@ -88,14 +89,14 @@ export const ResultsDisplay: React.FC<Props> = ({ summary, reportData, onDownloa
     switch (tab) {
       case 'summary': return <SummaryView summary={summary} report={reportData} onDownloadExcel={onDownloadExcel} onDownloadHtml={onDownloadHtml} />;
       case 'action': return reportData.action_register.length
-        ? <DataTable data={reportData.action_register} columns={cols.action} caption="The curated to-do list — only items needing human action, highest value first. Timing, free-of-cost and correct exclusions are omitted by design." />
+        ? <RecoGrid data={reportData.action_register} columns={cols.action} caption="The curated to-do list — only items needing human action, highest value first. Timing, free-of-cost and correct exclusions are omitted by design." />
         : <div className="p-8 text-center text-green-700 font-semibold">✓ Nothing needs action — no genuine mismatches after timing, FOC and exclusions are removed.</div>;
-      case 'matched': return <DataTable data={reportData.completely_matched} columns={cols.matched} caption="Documents in both sources that tie out within tolerance." />;
-      case 'variances': return <DataTable data={reportData.variances} columns={cols.variances} caption="Matched documents with value, tax-type, GSTIN or timing differences (sorted by value at risk)." />;
-      case 'ewbOnly': return <DataTable data={reportData.ewb_only} columns={cols.ewbOnly} caption="E-Way Bills with no matching GSTR-1 document — possible under-reporting (sorted by tax)." />;
-      case 'gstrOnly': return <DataTable data={reportData.gstr_only} columns={cols.gstrOnly} caption="GSTR-1 documents with no matching E-Way Bill (sorted by assessable value)." />;
-      case 'cancelled': return <DataTable data={rawRows(reportData.cancelled_ewb)} columns={cols.cancelled} caption="E-Way Bills excluded because status is Cancelled." />;
-      case 'dc': return <DataTable data={rawRows(reportData.delivery_challans)} columns={cols.dc} caption="E-Way Bills excluded because document type is Delivery Challan." />;
+      case 'matched': return <RecoGrid data={reportData.completely_matched} columns={cols.matched} caption="Documents in both sources that tie out within tolerance." />;
+      case 'variances': return <RecoGrid data={reportData.variances} columns={cols.variances} caption="Matched documents with value, tax-type, GSTIN or timing differences (sorted by value at risk)." />;
+      case 'ewbOnly': return <RecoGrid data={reportData.ewb_only} columns={cols.ewbOnly} caption="E-Way Bills with no matching GSTR-1 document — possible under-reporting (sorted by tax)." />;
+      case 'gstrOnly': return <RecoGrid data={reportData.gstr_only} columns={cols.gstrOnly} caption="GSTR-1 documents with no matching E-Way Bill (sorted by assessable value)." />;
+      case 'cancelled': return <RecoGrid data={rawRows(reportData.cancelled_ewb)} columns={cols.cancelled} caption="E-Way Bills excluded because status is Cancelled." />;
+      case 'dc': return <RecoGrid data={rawRows(reportData.delivery_challans)} columns={cols.dc} caption="E-Way Bills excluded because document type is Delivery Challan." />;
       default: return null;
     }
   };
